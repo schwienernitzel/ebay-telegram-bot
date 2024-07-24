@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, CallbackContext
 
-# Hier den erhaltenen API-Token einfügen
+# Telegram API token from environment variables
 TELEGRAM_API_TOKEN = os.getenv('TELEGRAM_API')
 
 if not TELEGRAM_API_TOKEN:
@@ -14,10 +14,8 @@ if not TELEGRAM_API_TOKEN:
     sleep(2)
     sys.exit(1)
 
-# Funktion zum Scrapen von eBay-Angeboten mit zusätzlichen Parametern
 def scrape_ebay(keyword, min_price=None, max_price=None, condition=None, listing_type=None):
     url = f"https://www.ebay.de/sch/i.html?_nkw={keyword}"
-    
     if min_price:
         url += f"&_udlo={min_price}"
     if max_price:
@@ -45,6 +43,9 @@ def scrape_ebay(keyword, min_price=None, max_price=None, condition=None, listing
             title = item.find('span', class_='s-item__title')
         
         title_text = title.get_text().strip() if title and title.get_text().strip() else "Kein Titel"
+        
+        # Limit title to the first 5 words
+        title_text = ' '.join(title_text.split()[:5])
 
         price = item.find('span', class_='s-item__price')
         price_text = price.get_text().strip() if price else "Kein Preis"
@@ -55,7 +56,6 @@ def scrape_ebay(keyword, min_price=None, max_price=None, condition=None, listing
     
     return items
 
-# Funktion zum Senden von eBay-Angeboten
 def send_ebay_offers(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
     args = context.args
@@ -90,20 +90,19 @@ def send_ebay_offers(update: Update, context: CallbackContext):
     details = {}
     
     for idx, item in enumerate(items):
-        message += f"{idx+1}. {item['title']} - Preis: {item['price']}\n"
+        message += f"_{idx+1}_. {item['title']} - _Preis:_ *{item['price']}*\n"
         details[str(idx+1)] = item['link']
         
         # Check if the message length exceeds the Telegram limit (4096 characters)
         if len(message) > 4000:
-            context.bot.send_message(chat_id=chat_id, text=message)
+            context.bot.send_message(chat_id=chat_id, text=message, parse_mode='Markdown')
             message = ""
 
     if message:
-        context.bot.send_message(chat_id=chat_id, text=message)
+        context.bot.send_message(chat_id=chat_id, text=message, parse_mode='Markdown')
     
     context.user_data['details'] = details
 
-# Funktion zum Bereitstellen der Detailansicht
 def detail(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
     args = update.message.text.split(" ")
@@ -121,7 +120,6 @@ def detail(update: Update, context: CallbackContext):
     else:
         context.bot.send_message(chat_id=chat_id, text="Ungültige Nummer. Bitte versuche es erneut.")
 
-# Funktion zum Senden der Hilfe-Nachricht
 def help_command(update: Update, context: CallbackContext):
     help_text = (
         "Hallo! Ich bin dein eBay-Scraping-Bot. Hier sind die verfügbaren Befehle:\n\n"
